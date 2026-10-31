@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validation Helpers ---
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 80 &&
+             (!('phone' in data) || data.phone == null || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('institution' in data) || data.institution == null || (data.institution is string && data.institution.size() <= 150)) &&
+             (!('role' in data) || data.role == null || (data.role is string && data.role.size() <= 60)) &&
+             (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('updatedAt' in data) || data.updatedAt == null || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidNotificationSettings(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.newMessages is bool &&
+             data.taskReminders is bool &&
+             data.specialOffers is bool &&
+             (!('modelTrainingAlerts' in data) || data.modelTrainingAlerts is bool) &&
+             (!('variantAlerts' in data) || data.variantAlerts is bool) &&
+             (!('emailNotifications' in data) || data.emailNotifications is bool) &&
+             (!('updatedAt' in data) || data.updatedAt == null || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidActivityRecord(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.type is string && data.type.size() <= 40 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+             data.description is string && data.description.size() <= 400 &&
+             (!('gene' in data) || data.gene == null || (data.gene is string && data.gene.size() <= 30)) &&
+             (!('variantId' in data) || data.variantId == null || (data.variantId is string && data.variantId.size() <= 60)) &&
+             data.timestamp is timestamp && data.timestamp <= request.time;
+    }
+
+    function isValidVariantPrediction(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.gene is string && data.gene.size() > 0 && data.gene.size() <= 30 &&
+             (!('assembly' in data) || (data.assembly is string && data.assembly.size() <= 20)) &&
+             data.chromosome is string && data.chromosome.size() > 0 && data.chromosome.size() <= 10 &&
+             data.position is int && data.position >= 0 &&
+             data.refAllele is string && data.refAllele.size() > 0 && data.refAllele.size() <= 100 &&
+             data.altAllele is string && data.altAllele.size() > 0 && data.altAllele.size() <= 100 &&
+             (!('variantType' in data) || (data.variantType is string && data.variantType.size() <= 50)) &&
+             (!('variationId' in data) || data.variationId == null || (data.variationId is string && data.variationId.size() <= 50)) &&
+             data.predictedLabel is string && (data.predictedLabel == 'Pathogenic' || data.predictedLabel == 'Benign' || data.predictedLabel == 'Likely Pathogenic' || data.predictedLabel == 'Likely Benign' || data.predictedLabel == 'VUS') &&
+             (!('riskScore' in data) || data.riskScore is number) &&
+             (!('confidence' in data) || data.confidence is number) &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // --- User Profile & Nested Subcollections ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll(['userId', 'email', 'displayName', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'displayName', 'phone', 'institution', 'role', 'bio', 'avatarUrl', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'phone', 'institution', 'role', 'bio', 'avatarUrl', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Notification settings
+      match /settings/notifications {
+        allow get: if isOwner(userId) && isValidId(userId);
+
+        allow create, update: if isOwner(userId) && isValidId(userId) &&
+                                 incoming().userId == userId &&
+                                 incoming().keys().hasAll(['userId', 'newMessages', 'taskReminders', 'specialOffers']) &&
+                                 incoming().keys().hasOnly(['userId', 'newMessages', 'taskReminders', 'specialOffers', 'modelTrainingAlerts', 'variantAlerts', 'emailNotifications', 'updatedAt']) &&
+                                 isValidNotificationSettings(incoming());
+
+        allow delete: if isOwner(userId) && isValidId(userId);
+      }
+
+      // User Activity History
+      match /activities/{activityId} {
+        allow get, list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(activityId) &&
+                         incoming().userId == userId &&
+                         incoming().id == activityId &&
+                         incoming().keys().hasAll(['id', 'userId', 'type', 'title', 'description', 'timestamp']) &&
+                         incoming().keys().hasOnly(['id', 'userId', 'type', 'title', 'description', 'gene', 'variantId', 'timestamp']) &&
+                         isValidActivityRecord(incoming());
+
+        allow update: if false; // Audit records are immutable
+
+        allow delete: if isOwner(userId) && isValidId(userId);
+      }
+
+      // Variant Prioritization & Predictions
+      match /predictions/{predictionId} {
+        allow get, list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(predictionId) &&
+                         incoming().userId == userId &&
+                         incoming().id == predictionId &&
+                         incoming().keys().hasAll(['id', 'userId', 'gene', 'chromosome', 'position', 'refAllele', 'altAllele', 'predictedLabel', 'createdAt']) &&
+                         incoming().keys().hasOnly(['id', 'userId', 'gene', 'assembly', 'chromosome', 'position', 'refAllele', 'altAllele', 'variantType', 'variationId', 'predictedLabel', 'riskScore', 'confidence', 'notes', 'createdAt']) &&
+                         isValidVariantPrediction(incoming());
+
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(predictionId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().id == existing().id &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidVariantPrediction(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['notes']);
+
+        allow delete: if isOwner(userId) && isValidId(userId);
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal details, professional role, and contact info.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique Firebase Auth UID." },
+        "email": { "type": "string", "description": "User's email address." },
+        "displayName": { "type": "string", "description": "User's display or full name." },
+        "phone": { "type": "string", "description": "Optional contact phone number." },
+        "institution": { "type": "string", "description": "Clinical or research institution/organization." },
+        "role": { "type": "string", "description": "Professional role (e.g. Geneticist, Bioinformatician, Clinician, Researcher, Student)." },
+        "bio": { "type": "string", "description": "Brief biography or research focus." },
+        "avatarUrl": { "type": "string", "description": "Optional URL to avatar photo." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Document creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp." }
+      },
+      "required": ["userId", "email", "displayName", "createdAt"]
+    },
+    "NotificationSettings": {
+      "title": "NotificationSettings",
+      "description": "User's customizable push notification preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owning user UID." },
+        "newMessages": { "type": "boolean", "description": "Notifications for direct messages or peer collaborations." },
+        "taskReminders": { "type": "boolean", "description": "Reminders for scheduled analysis tasks and sample reviews." },
+        "specialOffers": { "type": "boolean", "description": "Announcements, grant alerts, and platform special offers." },
+        "modelTrainingAlerts": { "type": "boolean", "description": "Alerts when ClinVar model retraining completes." },
+        "variantAlerts": { "type": "boolean", "description": "Alerts when priority gene variants change clinical status." },
+        "emailNotifications": { "type": "boolean", "description": "Digest emails flag." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when preferences were updated." }
+      },
+      "required": ["userId", "newMessages", "taskReminders", "specialOffers"]
+    },
+    "ActivityRecord": {
+      "title": "ActivityRecord",
+      "description": "User's audit trail and timeline of actions within the app.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique activity ID." },
+        "userId": { "type": "string", "description": "Owning user UID." },
+        "type": { "type": "string", "description": "Activity category: prediction, model_training, search, profile_update, notification_toggle, or export." },
+        "title": { "type": "string", "description": "Short human-readable title." },
+        "description": { "type": "string", "description": "Detailed description of the activity." },
+        "gene": { "type": "string", "description": "Associated gene symbol if applicable (e.g. BRCA1)." },
+        "variantId": { "type": "string", "description": "Associated ClinVar or dbSNP variation ID." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Activity occurrence timestamp." }
+      },
+      "required": ["id", "userId", "type", "title", "description", "timestamp"]
+    },
+    "VariantPrediction": {
+      "title": "VariantPrediction",
+      "description": "Saved genetic mutation prioritization and pathogenic/benign prediction record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique prediction ID." },
+        "userId": { "type": "string", "description": "Owning user UID." },
+        "gene": { "type": "string", "description": "Gene symbol (e.g., BRCA1, BRCA2, TP53, PTEN, CFTR, MSH2, MLH1, EGFR)." },
+        "assembly": { "type": "string", "description": "Genome assembly (e.g., GRCh38)." },
+        "chromosome": { "type": "string", "description": "Chromosome identifier (e.g. 17, 13)." },
+        "position": { "type": "integer", "description": "Genomic position (VCF or Start)." },
+        "refAllele": { "type": "string", "description": "Reference allele sequence (e.g. A, C, G, T)." },
+        "altAllele": { "type": "string", "description": "Alternate allele sequence." },
+        "variantType": { "type": "string", "description": "Type of variation: Single nucleotide variant, Deletion, Duplication, Indel, Insertion." },
+        "variationId": { "type": "string", "description": "ClinVar Variation ID." },
+        "predictedLabel": { "type": "string", "description": "Class prediction: Pathogenic or Benign." },
+        "riskScore": { "type": "number", "description": "ML risk score / probability between 0.0 and 1.0." },
+        "confidence": { "type": "number", "description": "Model confidence score." },
+        "notes": { "type": "string", "description": "Researcher notes or clinical annotations." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Prediction timestamp." }
+      },
+      "required": ["id", "userId", "gene", "chromosome", "position", "refAllele", "altAllele", "predictedLabel", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document keyed by auth UID."
+    },
+    "/users/{userId}/settings/notifications": {
+      "schema": "NotificationSettings",
+      "description": "User notification customization document."
+    },
+    "/users/{userId}/activities/{activityId}": {
+      "schema": "ActivityRecord",
+      "description": "Audit trail of user actions within the app."
+    },
+    "/users/{userId}/predictions/{predictionId}": {
+      "schema": "VariantPrediction",
+      "description": "Saved variant classifications and risk scores."
+    }
+  }
+}

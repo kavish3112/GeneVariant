@@ -1,0 +1,6 @@
+{
+  "name": "GeneVariant",
+  "description": "Genetic mutation prioritization, ClinVar variant classification, ML risk prediction, user profiles, and activity tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
